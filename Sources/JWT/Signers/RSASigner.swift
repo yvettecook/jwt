@@ -58,6 +58,33 @@ public enum RSAKey {
     }
 }
 
+extension RSAKey {
+    init?(pem: String) {
+        let bio = BIO_new(BIO_s_mem())
+        defer {
+            BIO_free(bio)
+        }
+
+        _ = pem.withCString { key in
+            BIO_puts(bio, key)
+        }
+
+        guard let pkey = PEM_read_bio_PrivateKey(bio, nil, nil, nil) else {
+            return nil
+        }
+
+        defer {
+            EVP_PKEY_free(pkey)
+        }
+
+        guard let rsa = EVP_PKEY_get1_RSA(pkey) else {
+            return nil
+        }
+
+        self = .private(rsa)
+    }
+}
+
 public final class RS256: RSASigner {
     public let hashMethod = HashMethod.sha256
     public let key: RSAKey
@@ -110,6 +137,12 @@ extension RSASigner {
 
     public init(key: Bytes) throws {
         try self.init(rsaKey: try RSAKey(key))
+    }
+
+    public init(pem: String) throws {
+        guard let rsaKey = RSAKey(pem: pem)
+            else { fatalError("could not create RSAKey") }
+        try self.init(rsaKey: rsaKey)
     }
 }
 
